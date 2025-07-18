@@ -1,21 +1,25 @@
-const chokidar = require('chokidar');
-const path = require('path');
-const fs = require('fs-extra');
-const { EventEmitter } = require('events');
-const minimatch = require('minimatch');
+import * as chokidar from 'chokidar';
+import * as path from 'path';
+import * as fs from 'fs-extra';
+import { EventEmitter } from 'events';
+import { Config } from '../types';
+import { Merger } from './merger';
 
-class PatchWatcher extends EventEmitter {
-    constructor(config, merger) {
+export class PatchWatcher extends EventEmitter {
+    private config: Config;
+    private merger: Merger;
+    private watcher: chokidar.FSWatcher | null = null;
+    private outputWatcher: chokidar.FSWatcher | null = null;
+    private syncingFiles: Set<string> = new Set(); // 防止循环依赖的标识
+    private timers: Set<NodeJS.Timeout> = new Set(); // 管理定时器
+
+    constructor(config: Config, merger: Merger) {
         super();
         this.config = config;
         this.merger = merger;
-        this.watcher = null;
-        this.outputWatcher = null;
-        this.syncingFiles = new Set(); // 防止循环依赖的标识
-        this.timers = new Set(); // 管理定时器
     }
 
-    start() {
+    start(): void {
         const { baseDir, patchDir, outputDir, watchDelay = 100 } = this.config;
         const fullPatchDir = this.getFullPatchDir();
 
@@ -51,15 +55,15 @@ class PatchWatcher extends EventEmitter {
 
         // 事件绑定
         this.watcher
-            .on('add', filePath => this.handleAdd(filePath))
-            .on('change', filePath => this.handleChange(filePath))
-            .on('unlink', filePath => this.handleDelete(filePath))
-            .on('error', error => console.error('监听错误:', error));
+            .on('add', (filePath: string) => this.handleAdd(filePath))
+            .on('change', (filePath: string) => this.handleChange(filePath))
+            .on('unlink', (filePath: string) => this.handleDelete(filePath))
+            .on('error', (error: Error) => console.error('监听错误:', error));
 
         // 目标目录事件绑定（反向同步）
         this.outputWatcher
-            .on('change', filePath => this.handleOutputChange(filePath))
-            .on('error', error => console.error('目标目录监听错误:', error));
+            .on('change', (filePath: string) => this.handleOutputChange(filePath))
+            .on('error', (error: Error) => console.error('目标目录监听错误:', error));
 
         console.log(`👀 开始监听目录:
                       - 基础目录: ${baseDir}
@@ -68,7 +72,7 @@ class PatchWatcher extends EventEmitter {
     }
 
     // 处理目标目录文件变更（反向同步到源文件）
-    async handleOutputChange(filePath) {
+    private async handleOutputChange(filePath: string): Promise<void> {
         this.emit('change', filePath);
         const { baseDir, outputDir } = this.config;
         const relativePath = path.relative(outputDir, filePath);
@@ -123,8 +127,8 @@ class PatchWatcher extends EventEmitter {
     }
 
     // 修改原有的同步方法，添加循环依赖防护
-    async handleChange(filePath,isNoChange = true) {
-        if(isNoChange){
+    private async handleChange(filePath: string, isNoChange: boolean = true): Promise<void> {
+        if (isNoChange) {
             this.emit('change', filePath);
         }
         const { baseDir, outputDir } = this.config;
@@ -203,26 +207,43 @@ class PatchWatcher extends EventEmitter {
         if (this.config.plugins) {
             for (const plugin of this.config.plugins) {
                 if (typeof plugin.fileChange === 'function') {
-                    await plugin.fileChange(filePath);
+                    try {
+                        await plugin.fileChange(filePath);
+                    } catch (error) {
+                        console.error(`插件 fileChange 钩子执行失败:`, error);
+                    }
                 }
             }
         }
     }
 
-    async handleAdd(filePath) {
+    private async handleAdd(filePath: string): Promise<void> {
         this.emit('add', filePath);
         // 文件添加时可以触发同步逻辑，类似 handleChange
-        await this.handleChange(filePath,false);
+        await this.handleChange(filePath, false);
+
+        // 文件添加时运行插件生命周期
+        if (this.config.plugins) {
+            for (const plugin of this.config.plugins) {
+                if (typeof plugin.fileAdd === 'function') {
+                    try {
+                        await plugin.fileAdd(filePath);
+                    } catch (error) {
+                        console.error(`插件 fileAdd 钩子执行失败:`, error);
+                    }
+                }
+            }
+        }
     }
 
-    async handleDelete(filePath) {
-        this.emit('delete', filePath);
+    private async handleDelete(filePath: string): Promise<void> {
+        this.emit('unlink', filePath);
         const { baseDir, outputDir } = this.config;
         console.log(`🗑️ 文件删除: ${filePath}`);
 
         try {
-            let relativePath;
-            let outputFilePath;
+            let relativePath: string;
+            let outputFilePath: string;
 
             if (filePath.startsWith(baseDir)) {
                 relativePath = path.relative(baseDir, filePath);
@@ -245,6 +266,8 @@ class PatchWatcher extends EventEmitter {
                     console.log(`🔄 补丁文件已删除，恢复基础文件: ${relativePath}`);
                     return;
                 }
+            } else {
+                return;
             }
 
             // 删除目标文件
@@ -256,9 +279,21 @@ class PatchWatcher extends EventEmitter {
             console.error(`文件删除同步失败: ${filePath}`, error);
         }
 
+        // 文件删除时运行插件生命周期
+        if (this.config.plugins) {
+            for (const plugin of this.config.plugins) {
+                if (typeof plugin.fileDelete === 'function') {
+                    try {
+                        await plugin.fileDelete(filePath);
+                    } catch (error) {
+                        console.error(`插件 fileDelete 钩子执行失败:`, error);
+                    }
+                }
+            }
+        }
     }
 
-    stop() {
+    stop(): void {
         if (this.watcher) {
             this.watcher.close();
         }
@@ -271,19 +306,17 @@ class PatchWatcher extends EventEmitter {
     }
 
     // 清除所有定时器
-    clearAllTimers() {
+    private clearAllTimers(): void {
         for (const timer of this.timers) {
             clearTimeout(timer);
         }
         this.timers.clear();
     }
 
-    getFullPatchDir() {
+    public getFullPatchDir(): string {
         return path.join(
             this.config.patchDir,
             this.config.patchChildDir || ''
         );
     }
 }
-
-module.exports = PatchWatcher;

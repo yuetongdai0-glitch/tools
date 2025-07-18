@@ -1,16 +1,19 @@
-const path = require('path');
-const fs = require('fs-extra');
-const minimatch = require('minimatch');
+import * as path from 'path';
+import * as fs from 'fs-extra';
+import minimatch from 'minimatch';
+import { Config } from '../types';
 
-class Merger {
-    constructor(config) {
+export class Merger {
+    private config: Config;
+
+    constructor(config: Config) {
         this.config = config;
     }
 
     /**
      * 全量合并
      */
-    async mergeAll() {
+    async mergeAll(): Promise<void> {
         await this.clearOutput();
         await this.copyBaseFiles();
         await this.applyPatches();
@@ -18,7 +21,7 @@ class Merger {
 
     // 以下是具体实现方法
     // ===============================================
-    async clearOutput() {
+    private async clearOutput(): Promise<void> {
         const srcDir = this.config.outputDir;
         if (await fs.pathExists(srcDir)) {
             const files = await fs.readdir(srcDir);
@@ -30,12 +33,14 @@ class Merger {
         }
     }
 
-    async copyBaseFiles() {
+    private async copyBaseFiles(): Promise<void> {
         await this.copyFilesRecursively(this.config.baseDir, this.config.outputDir, '');
     }
 
-    // 递归复制基础文件
-    async copyFilesRecursively(srcDir, destDir, relativePath) {
+    /**
+     * 递归复制基础文件
+     */
+    private async copyFilesRecursively(srcDir: string, destDir: string, relativePath: string): Promise<void> {
         const currentSrcDir = path.join(srcDir, relativePath);
         const currentDestDir = path.join(destDir, relativePath);
 
@@ -71,15 +76,17 @@ class Merger {
         }
     }
 
-    async applyPatches() {
+    private async applyPatches(): Promise<void> {
         const patchDir = this.getFullPatchDir();
         if (!fs.existsSync(patchDir)) return;
 
         await this.applyPatchesRecursively(patchDir, this.config.outputDir, '');
     }
 
-    // 递归应用补丁文件
-    async applyPatchesRecursively(patchDir, destDir, relativePath) {
+    /**
+     * 递归应用补丁文件
+     */
+    private async applyPatchesRecursively(patchDir: string, destDir: string, relativePath: string): Promise<void> {
         const currentPatchDir = path.join(patchDir, relativePath);
         const currentDestDir = path.join(destDir, relativePath);
 
@@ -115,31 +122,41 @@ class Merger {
 
     // 辅助方法
     // ===============================================
-    getFullPatchDir() {
+    public getFullPatchDir(): string {
         return path.join(
             this.config.patchDir,
             this.config.patchChildDir || ''
         );
     }
 
-    async isIgnored(filePath) {
+    async isIgnored(filePath: string): Promise<boolean> {
         // 确保路径格式一致，使用正斜杠
         const normalizedPath = filePath.replace(/\\/g, '/');
 
-        return this.config.ignoredPatterns.some(pattern => {
-            const isMatch = minimatch(normalizedPath, pattern, {
-                dot: true,  // 匹配以点开头的文件
-                matchBase: true  // 允许基础名称匹配
-            });
+        if (!this.config.ignoredPatterns) {
+            return false;
+        }
 
-            // 调试日志
-            if (isMatch) {
-                console.log(`🚫 忽略文件: ${normalizedPath} (匹配模式: ${pattern})`);
+        return this.config.ignoredPatterns.some(pattern => {
+            if (typeof pattern === 'string') {
+                const isMatch = minimatch(normalizedPath, pattern, {
+                    dot: true,  // 匹配以点开头的文件
+                    matchBase: true  // 允许基础名称匹配
+                });
+
+                // 调试日志
+                if (isMatch) {
+                    console.log(`🚫 忽略文件: ${normalizedPath} (匹配模式: ${pattern})`);
+                }
+
+                return isMatch;
+            } else if (pattern instanceof RegExp) {
+                return pattern.test(normalizedPath);
+            } else if (typeof pattern === 'function') {
+                return pattern(normalizedPath);
             }
 
-            return isMatch;
+            return false;
         });
     }
 }
-
-module.exports = Merger;

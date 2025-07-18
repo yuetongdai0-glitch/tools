@@ -1,17 +1,22 @@
-const path = require('path');
-const fs = require('fs');
-// 使用绝对路径引入模块
-const Merger = require(path.join(__dirname, './core/merger'));
-const Watcher = require(path.join(__dirname, './core/watcher'));
-const RunApp = require(path.join(__dirname, './core/run-app'));
+import * as fs from 'fs';
+import { Merger } from './core/merger';
+import { PatchWatcher } from './core/watcher';
+import { RunApp } from './core/run-app';
+import type { Config,PatchMergerOptions } from './types';
 
-// 将工具函数移入当前文件避免循环依赖
-function loadConfig(configPath) {
-    const defaultConfig = {
+/**
+ * 加载配置文件
+ */
+function loadConfig(configPath: string): Config {
+    const defaultConfig: Config = {
         baseDir: 'public_src',
         patchDir: 'patch',
         outputDir: 'src',
-        watch: true
+        watch: true,
+        mode: 'development',
+        ignoredPatterns: [],
+        plugins: [],
+        watchDelay: 100
     };
 
     if (!fs.existsSync(configPath)) {
@@ -19,31 +24,31 @@ function loadConfig(configPath) {
         return defaultConfig;
     }
 
+    const userConfig = require(configPath);
     return {
         ...defaultConfig,
-        ...require(configPath)
+        ...userConfig
     };
 }
 
-class PatchMerger {
+/**
+ * 主要的补丁合并器类
+ */
+export class PatchMerger {
+    private config: Config;
+    private merger: Merger;
+    private RunApp: RunApp;
+    private watcher: PatchWatcher;
+
     /**
-     * @param {object} options
-     * @param {string} options.configPath - 配置文件路径
-     * @param {string} [options.patchChildDir] - 补丁子目录
-     * @param {boolean} [options.watch=true] - 是否启用监听
-     * @param {boolean} [options.verbose=false] - 详细日志模式
-     * @typedef {Object} Plugin
-     * @property {function(string): Promise<void>|void} [fileAdd] - 文件添加时触发
-     * @property {function(string): Promise<void>|void} [fileChange] - 文件修改时触发
-     * @property {function(string): Promise<void>|void} [fileDelete] - 文件删除时触发
-     * @property {function(Error): void} [watchError] - 监听器错误时触发
-     * @property {function(): Promise<void>|void} [beforeProdHook] - 生产模式启动前触发
-     * @property {function(): Promise<void>|void} [beforeDevHook] - 开发模式启动前触发
-     * @property {function(): Promise<void>|void} [afterMergeHook] - 合并完成后触发
-     * @property {function(): Promise<void>|void} [afterStartHook] - 应用启动后触发
+     * 创建 PatchMerger 实例
      */
-    constructor({ configPath, patchChildDir, watch = true, verbose = false }) {
-        if (!configPath) throw new Error('configPath 是必须参数');
+    constructor(options: PatchMergerOptions) {
+        const { configPath, patchChildDir, watch = true, verbose = false } = options;
+
+        if (!configPath) {
+            throw new Error('configPath 是必须参数');
+        }
 
         // 加载配置
         this.config = loadConfig(configPath);
@@ -55,10 +60,11 @@ class PatchMerger {
             watch,
             verbose
         };
+
         // 初始化核心模块
         this.merger = new Merger(this.config);
         this.RunApp = new RunApp(this.config);
-        this.watcher = new Watcher(this.config, this.merger);
+        this.watcher = new PatchWatcher(this.config, this.merger);
 
         // 监听 PatchWatcher 的事件
         this.setupWatcherEvents();
@@ -67,9 +73,9 @@ class PatchMerger {
     /**
      * 设置 PatchWatcher 事件监听
      */
-    setupWatcherEvents() {
+    private setupWatcherEvents(): void {
         // 监听文件添加事件
-        this.watcher.on('add', async (filePath) => {
+        this.watcher.on('add', async (filePath: string) => {
             if (this.config.plugins) {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.fileAdd === 'function') {
@@ -84,7 +90,7 @@ class PatchMerger {
         });
 
         // 监听文件修改事件
-        this.watcher.on('change', async (filePath) => {
+        this.watcher.on('change', async (filePath: string) => {
             if (this.config.plugins) {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.fileChange === 'function') {
@@ -99,7 +105,7 @@ class PatchMerger {
         });
 
         // 监听文件删除事件
-        this.watcher.on('unlink', async (filePath) => {
+        this.watcher.on('unlink', async (filePath: string) => {
             if (this.config.plugins) {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.fileDelete === 'function') {
@@ -114,7 +120,8 @@ class PatchMerger {
         });
 
         // 监听监听器错误事件
-        this.watcher.on('error', (error) => {
+        this.watcher.on('error', (error: Error) => {
+            console.error('文件监听器错误:', error);
             if (this.config.plugins) {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.watchError === 'function') {
@@ -129,22 +136,25 @@ class PatchMerger {
         });
     }
 
-    /** *
+    /**
      * 开发模式
      */
-    async dev() {
+    async dev(): Promise<void> {
         try {
             await this.merger.mergeAll();
-            // 执行上线前的插件钩子
+
+            // 执行开发模式启动前的插件钩子
             if (this.config.plugins) {
                 for (const plugin of this.config.plugins) {
-                    if (typeof plugin.beforeProdHook === 'function') {
-                        await plugin.beforeProdHook();
+                    if (typeof plugin.beforeDevHook === 'function') {
+                        await plugin.beforeDevHook();
                     }
                 }
             }
+
             await this.RunApp.start();
-            if(this.config.watch){
+
+            if (this.config.watch) {
                 await this.watcher.start();
             }
         } catch (err) {
@@ -153,13 +163,14 @@ class PatchMerger {
         }
     }
 
-    /** *
+    /**
      * 生产模式
      */
-    async prod() {
+    async prod(): Promise<void> {
         try {
             await this.merger.mergeAll();
-            // 执行上线前的插件钩子
+
+            // 执行生产模式启动前的插件钩子
             if (this.config.plugins) {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.beforeProdHook === 'function') {
@@ -167,6 +178,7 @@ class PatchMerger {
                     }
                 }
             }
+
             this.RunApp.start();
         } catch (err) {
             console.error('❌ 启动失败:', err);
@@ -174,16 +186,15 @@ class PatchMerger {
         }
     }
 
-    /** *
+    /**
      * 启动方法
      */
-    async start() {
+    async start(): Promise<void> {
         try {
-            if(this.config.mode === 'development'){
-                await this.dev()
-            }
-            else if(this.config.mode === 'production'){
-                await this.prod()
+            if (this.config.mode === 'development') {
+                await this.dev();
+            } else if (this.config.mode === 'production') {
+                await this.prod();
             }
         } catch (err) {
             console.error('❌ 启动失败:', err);
@@ -194,12 +205,12 @@ class PatchMerger {
     /**
      * 停止监听器
      */
-    stop() {
+    stop(): void {
         if (this.watcher) {
             this.watcher.stop();
         }
     }
 }
 
-// 确保只导出类
-module.exports = PatchMerger;
+// 默认导出
+export default PatchMerger;

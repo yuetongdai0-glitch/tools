@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const chalk = require('chalk');
 const { Command } = require('commander');
-const  PatchMerger = require(path.join(__dirname,'../src/index.js'));
+const  {PatchMerger} = require(path.join(__dirname,'../dist/index.js'));
 // 初始化命令行程序
 const program = new Command();
 

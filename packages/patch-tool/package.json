@@ -6,6 +6,7 @@
     "patch-cli": "./bin/cli.js"
   },
   "scripts": {
+    "build": "rollup -c",
     "test": "jest",
     "lint": "eslint src"
   },
@@ -16,14 +17,21 @@
     "commander": "^9.4.1",
     "cross-spawn": "^7.0.6",
     "fs-extra": "^11.2.0",
+    "tslib": "^2.6.2",
     "tree-kill": "^1.2.2"
   },
   "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/minimatch": "^5.1.2",
     "@types/node": "^24.0.8",
-    "eslint": "^8.56.0"
+    "eslint": "^8.56.0",
+    "typescript": "^5.0.0",
+    "rollup": "^3.0.0",
+    "rollup-plugin-typescript2": "^0.34.0",
+    "rollup-plugin-node-resolve": "^5.2.0",
+    "rollup-plugin-commonjs": "^10.1.0"
   },
   "keywords": [
-    "umi",
     "patch",
     "merger",
     "multi-project"
