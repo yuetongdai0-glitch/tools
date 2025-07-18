@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as path from 'path';
 import { Merger } from './core/merger';
 import { PatchWatcher } from './core/watcher';
 import { RunApp } from './core/run-app';
@@ -24,7 +25,39 @@ function loadConfig(configPath: string): Config {
         return defaultConfig;
     }
 
-    const userConfig = require(configPath);
+    const ext = path.extname(configPath).toLowerCase();
+    let userConfig: any;
+
+    try {
+        if (ext === '.json') {
+            // JSON 文件
+            const configContent = fs.readFileSync(configPath, 'utf-8');
+            userConfig = JSON.parse(configContent);
+        } else if (ext === '.js' || ext === '.mjs') {
+            // JavaScript 文件
+            delete require.cache[path.resolve(configPath)];
+            userConfig = require(path.resolve(configPath));
+            // 支持 ES6 default export
+            userConfig = userConfig.default || userConfig;
+        } else if (ext === '.ts') {
+            // TypeScript 文件 (需要 ts-node 或预编译)
+            delete require.cache[path.resolve(configPath)];
+            require('ts-node/register');
+            userConfig = require(path.resolve(configPath));
+            userConfig = userConfig.default || userConfig;
+        } else {
+            throw new Error(`不支持的配置文件格式: ${ext}`);
+        }
+    } catch (error) {
+        console.error(`加载配置文件失败: ${error}`);
+        return defaultConfig;
+    }
+
+    // 如果是函数，执行它获取配置
+    if (typeof userConfig === 'function') {
+        userConfig = userConfig();
+    }
+
     return {
         ...defaultConfig,
         ...userConfig
@@ -80,7 +113,7 @@ export class PatchMerger {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.fileAdd === 'function') {
                         try {
-                            await plugin.fileAdd(filePath);
+                            await plugin.fileAdd(this.config,filePath);
                         } catch (error) {
                             console.error(`插件 fileAdd 钩子执行失败:`, error);
                         }
@@ -95,7 +128,7 @@ export class PatchMerger {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.fileChange === 'function') {
                         try {
-                            await plugin.fileChange(filePath);
+                            await plugin.fileChange(this.config,filePath);
                         } catch (error) {
                             console.error(`插件 fileChange 钩子执行失败:`, error);
                         }
@@ -110,7 +143,7 @@ export class PatchMerger {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.fileDelete === 'function') {
                         try {
-                            await plugin.fileDelete(filePath);
+                            await plugin.fileDelete(this.config,filePath);
                         } catch (error) {
                             console.error(`插件 fileDelete 钩子执行失败:`, error);
                         }
@@ -126,7 +159,7 @@ export class PatchMerger {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.watchError === 'function') {
                         try {
-                            plugin.watchError(error);
+                            plugin.watchError(this.config,error);
                         } catch (err) {
                             console.error(`插件 watchError 钩子执行失败:`, err);
                         }
@@ -147,7 +180,7 @@ export class PatchMerger {
             if (this.config.plugins) {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.beforeDevHook === 'function') {
-                        await plugin.beforeDevHook();
+                        await plugin.beforeDevHook(this.config);
                     }
                 }
             }
@@ -174,7 +207,7 @@ export class PatchMerger {
             if (this.config.plugins) {
                 for (const plugin of this.config.plugins) {
                     if (typeof plugin.beforeProdHook === 'function') {
-                        await plugin.beforeProdHook();
+                        await plugin.beforeProdHook(this.config);
                     }
                 }
             }

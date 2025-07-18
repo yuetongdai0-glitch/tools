@@ -4,48 +4,57 @@
 export interface Plugin {
     /**
      * 文件添加时触发
+     * @param config 应用配置，排除Plugin类型
      * @param filePath 添加的文件路径
      */
-    fileAdd?: (filePath: string) => Promise<void> | void;
+    fileAdd?: (config?: Config, filePath?: string) => Promise<void> | void;
 
     /**
      * 文件修改时触发
+     * @param config 应用配置，排除Plugin类型
      * @param filePath 修改的文件路径
      */
-    fileChange?: (filePath: string) => Promise<void> | void;
+    fileChange?: (config?: Config, filePath?: string) => Promise<void> | void;
 
     /**
      * 文件删除时触发
+     * @param config 应用配置，排除Plugin类型
      * @param filePath 删除的文件路径
      */
-    fileDelete?: (filePath: string) => Promise<void> | void;
+    fileDelete?: (config?: Config, filePath?: string) => Promise<void> | void;
 
     /**
      * 监听器错误时触发
+     * @param config 应用配置，排除Plugin类型
      * @param error 错误对象
      */
-    watchError?: (error: Error) => void;
+    watchError?: (config?: Config, error?: Error) => void;
 
     /**
      * 生产模式启动前触发
+     * @param config 应用配置，排除Plugin类型
      */
-    beforeProdHook?: () => Promise<void> | void;
+    beforeProdHook?: (config?: Config) => Promise<void> | void;
 
     /**
      * 开发模式启动前触发
+     * @param config 应用配置，排除Plugin类型
      */
-    beforeDevHook?: () => Promise<void> | void;
+    beforeDevHook?: (config?: Config) => Promise<void> | void;
 
     /**
      * 合并完成后触发
+     * @param config 应用配置，排除Plugin类型
      */
-    afterMergeHook?: () => Promise<void> | void;
+    afterMergeHook?: (config?: Config) => Promise<void> | void;
 
     /**
      * 应用启动后触发
+     * @param config 应用配置，排除Plugin类型
      */
-    afterStartHook?: () => Promise<void> | void;
+    afterStartHook?: (config?: Config) => Promise<void> | void;
 }
+
 
 /**
  * 应用运行配置
