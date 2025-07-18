@@ -1,0 +1,37 @@
+{
+  "name": "tailwindcss-theme-variants",
+  "version": "1.0.0",
+  "description": "A Tailwind CSS plugin for theme variants with CSS custom properties support",
+  "main": "index.js",
+  "keywords": [
+    "tailwindcss",
+    "plugin",
+    "theme",
+    "variants",
+    "css-variables",
+    "dark-mode",
+    "theming"
+  ],
+  "types": "index.d.ts",
+  "author": "ddyytt",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dytyyds/tailwindcss-theme-variants.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dytyyds/tailwindcss-theme-variants/issues"
+  },
+  "homepage": "https://github.com/dytyyds/tailwindcss-theme-variants#readme",
+  "peerDependencies": {
+    "tailwindcss": ">=3.0.0"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=12.0.0"
+  }
+}

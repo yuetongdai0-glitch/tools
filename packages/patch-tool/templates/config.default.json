@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "baseDir": "public_src",
+  "patchDir": "patch",
+  "outputDir": "src",
+  "umiCommand": "vite serve",
+  "watch": true,
+  "patchChildDir": "",
+  "hooks": {
+    "preMerge": "",
+    "postMerge": ""
+  },
+  "plugins": [
+
+  ],
+  "ignoredPatterns": [
+    "**/.gitkeep",
+    "**/.DS_Store",
+    "**/node_modules/**"
+  ],
+  "extensions": {
+    "locales": [".json", ".yaml"],
+    "staticAssets": [".png", ".jpg", ".svg"]
+  }
+}

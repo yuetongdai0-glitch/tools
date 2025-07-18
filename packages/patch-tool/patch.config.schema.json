@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Patch Tool Configuration",
+  "type": "object",
+  "required": ["baseDir", "patchDir", "outputDir"],
+  "properties": {
+    "baseDir": {
+      "type": "string",
+      "description": "基础项目目录"
+    },
+    "patchDir": {
+      "type": "string",
+      "description": "补丁根目录"
+    },
+    "outputDir": {
+      "type": "string",
+      "description": "输出目录"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["development", "production"],
+      "default": "development",
+      "description": "运行模式"
+    },
+    "ignoredPatterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "忽略的文件/目录模式"
+    },
+    "watchDelay": {
+      "type": "number",
+      "minimum": 0,
+      "default": 100,
+      "description": "文件监听延迟时间（毫秒）"
+    },
+    "app": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "启动命令"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "命令参数"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "工作目录"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "环境变量"
+        },
+        "detached": {
+          "type": "boolean",
+          "description": "是否在新窗口中运行"
+        }
+      }
+    },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "插件名称"
+          },
+          "options": {
+            "type": "object",
+            "description": "插件选项"
+          }
+        }
+      }
+    }
+  }
+}

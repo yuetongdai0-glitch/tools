@@ -1,0 +1,19 @@
+{
+  "name": "merge-cli",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev:us12": "pnpm --filter @mergeCli/umi-project run dev:us12",
+    "dev:us11": "pnpm --filter @mergeCli/umi-project run dev:us11"
+  },
+  "keywords": [],
+  "files": [
+    "src/",
+    "bin/",
+    "index.d.ts"
+  ],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.12.4"
+}
