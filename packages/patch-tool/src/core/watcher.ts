@@ -202,38 +202,12 @@ export class PatchWatcher extends EventEmitter {
         } catch (error) {
             console.error(`文件修改同步失败: ${filePath}`, error);
         }
-
-        // 文件变化时运行插件生命周期
-        if (this.config.plugins) {
-            for (const plugin of this.config.plugins) {
-                if (typeof plugin.fileChange === 'function') {
-                    try {
-                        await plugin.fileChange(filePath);
-                    } catch (error) {
-                        console.error(`插件 fileChange 钩子执行失败:`, error);
-                    }
-                }
-            }
-        }
     }
 
     private async handleAdd(filePath: string): Promise<void> {
         this.emit('add', filePath);
         // 文件添加时可以触发同步逻辑，类似 handleChange
         await this.handleChange(filePath, false);
-
-        // 文件添加时运行插件生命周期
-        if (this.config.plugins) {
-            for (const plugin of this.config.plugins) {
-                if (typeof plugin.fileAdd === 'function') {
-                    try {
-                        await plugin.fileAdd(filePath);
-                    } catch (error) {
-                        console.error(`插件 fileAdd 钩子执行失败:`, error);
-                    }
-                }
-            }
-        }
     }
 
     private async handleDelete(filePath: string): Promise<void> {
@@ -277,19 +251,6 @@ export class PatchWatcher extends EventEmitter {
             }
         } catch (error) {
             console.error(`文件删除同步失败: ${filePath}`, error);
-        }
-
-        // 文件删除时运行插件生命周期
-        if (this.config.plugins) {
-            for (const plugin of this.config.plugins) {
-                if (typeof plugin.fileDelete === 'function') {
-                    try {
-                        await plugin.fileDelete(filePath);
-                    } catch (error) {
-                        console.error(`插件 fileDelete 钩子执行失败:`, error);
-                    }
-                }
-            }
         }
     }
 

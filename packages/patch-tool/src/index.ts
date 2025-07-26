@@ -25,43 +25,106 @@ function loadConfig(configPath: string): Config {
         return defaultConfig;
     }
 
-    const ext = path.extname(configPath).toLowerCase();
-    let userConfig: any;
-
     try {
-        if (ext === '.json') {
-            // JSON 文件
-            const configContent = fs.readFileSync(configPath, 'utf-8');
-            userConfig = JSON.parse(configContent);
-        } else if (ext === '.js' || ext === '.mjs') {
-            // JavaScript 文件
-            delete require.cache[path.resolve(configPath)];
-            userConfig = require(path.resolve(configPath));
-            // 支持 ES6 default export
-            userConfig = userConfig.default || userConfig;
-        } else if (ext === '.ts') {
-            // TypeScript 文件 (需要 ts-node 或预编译)
-            delete require.cache[path.resolve(configPath)];
-            require('ts-node/register');
-            userConfig = require(path.resolve(configPath));
-            userConfig = userConfig.default || userConfig;
-        } else {
-            throw new Error(`不支持的配置文件格式: ${ext}`);
+        const fullPath = path.resolve(configPath);
+        let content = fs.readFileSync(fullPath, 'utf-8');
+
+        // 如果是 TypeScript 文件，移除类型注解
+        if (fullPath.endsWith('.ts')) {
+            content = removeTypeScriptTypes(content);
         }
-    } catch (error) {
-        console.error(`加载配置文件失败: ${error}`);
+
+        // 转换 ES 模块语法为 CommonJS
+        content = transformESModulesToCommonJS(content);
+
+        // 创建临时文件并执行
+        const tempPath = fullPath.replace(/\.(ts|js)$/, '.temp.js');
+        fs.writeFileSync(tempPath, content);
+
+        let userConfig: any;
+        try {
+            delete require.cache[require.resolve(tempPath)];
+            userConfig = require(tempPath);
+            fs.unlinkSync(tempPath);
+        } catch (error) {
+            if (fs.existsSync(tempPath)) {
+                fs.unlinkSync(tempPath);
+            }
+            throw error;
+        }
+
+        // 支持 ES6 default export
+        userConfig = userConfig.default || userConfig;
+        console.log(userConfig,"userConfiguserConfig")
+
+        // 如果是函数，执行它获取配置
+        if (typeof userConfig === 'function') {
+            userConfig = userConfig();
+        }
+
+        return {
+            ...defaultConfig,
+            ...userConfig
+        } as Config;
+
+    } catch (error: any) {
+        console.error(`加载配置文件失败: ${error.message || error}`);
+        console.warn('使用默认配置');
         return defaultConfig;
     }
+}
 
-    // 如果是函数，执行它获取配置
-    if (typeof userConfig === 'function') {
-        userConfig = userConfig();
-    }
+/**
+ * 移除 TypeScript 类型注解
+ */
+function removeTypeScriptTypes(content: string): string {
+    // 移除类型注解
+    content = content.replace(/:\s*[A-Za-z_$][\w$<>[\]|&.,\s]*(?=\s*[=,;)\]}])/g, '');
+    // 移除泛型
+    content = content.replace(/<[^>]*>/g, '');
+    // 移除接口定义
+    content = content.replace(/interface\s+\w+\s*\{[^}]*\}/g, '');
+    // 移除类型别名
+    content = content.replace(/type\s+\w+\s*=[^;]*;/g, '');
+    // 移除可选属性标记
+    content = content.replace(/\?\s*:/g, ':');
+    // 移除 as 类型断言
+    content = content.replace(/\s+as\s+\w+/g, '');
 
-    return {
-        ...defaultConfig,
-        ...userConfig
-    };
+    return content;
+}
+
+/**
+ * 转换 ES 模块语法为 CommonJS
+ */
+function transformESModulesToCommonJS(content: string): string {
+    // 转换 import 语句
+    content = content.replace(
+        /import\s+(\{[^}]+\}|\*\s+as\s+\w+|\w+)\s+from\s+['"]([^'"]+)['"];?/g,
+        (match, importPart, modulePath) => {
+            if (importPart.startsWith('{') && importPart.endsWith('}')) {
+                // 解构导入: import { a, b } from 'module'
+                return `const ${importPart} = require('${modulePath}');`;
+            } else if (importPart.includes('* as')) {
+                // 命名空间导入: import * as name from 'module'
+                const name = importPart.replace('* as ', '').trim();
+                return `const ${name} = require('${modulePath}');`;
+            } else {
+                // 默认导入: import name from 'module'
+                return `const ${importPart.trim()} = require('${modulePath}').default || require('${modulePath}');`;
+            }
+        }
+    );
+
+    // 转换 export default
+    content = content.replace(/export\s+default\s+/g, 'module.exports = ');
+
+    // 转换 export const/function/class
+    content = content.replace(/export\s+(const|function|class)\s+(\w+)/g,
+        '$1 $2'
+    );
+
+    return content;
 }
 
 /**
@@ -185,7 +248,7 @@ export class PatchMerger {
                 }
             }
 
-            await this.RunApp.start();
+             this.RunApp.start();
 
             if (this.config.watch) {
                 await this.watcher.start();
@@ -212,7 +275,16 @@ export class PatchMerger {
                 }
             }
 
-            this.RunApp.start();
+             this.RunApp.start();
+
+            // 打包完成之后运行插件钩子
+            if (this.config.plugins) {
+                for (const plugin of this.config.plugins) {
+                    if (typeof plugin.afterMergeHook === 'function') {
+                        await plugin.afterMergeHook(this.config);
+                    }
+                }
+            }
         } catch (err) {
             console.error('❌ 启动失败:', err);
             process.exit(1);

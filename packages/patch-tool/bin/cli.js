@@ -15,6 +15,7 @@ program
     .option('-c, --config <path>', '配置文件路径', 'patch.config.json')
     .option('--no-watch', '禁用文件监听模式')
     .option('-v, --verbose', '显示详细日志输出')
+    .allowUnknownOption(true)
     .action(async (options) => {
         try {
             // 参数验证
