@@ -1,4 +1,4 @@
-declare module 'tailwindcss-theme-variants' {
+declare module 'tailwind-theme-variants' {
     interface ThemeConfig {
         colors: Record<string, string>;
     }
